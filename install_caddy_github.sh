@@ -1,23 +1,4 @@
-#!/bin/bash
 
-# ==============================================================================
-# 脚本名称: install_caddy_universal.sh
-# 描述:     在主流 Linux 系统上从 GitHub Releases 下载并安装最新版 Caddy。
-#           此脚本会自动检测包管理器 (APT, YUM/DNF, Pacman) 并安装所需依赖。
-# 作者:     Gemini
-# 日期:     2025-08-30
-# ==============================================================================
-
-# 在执行命令时输出，并在出错时立即退出
-set -e
-set -o pipefail
-
-# --- 权限检查 ---
-if [ "$(id -u)" -ne 0 ]; then
-  echo "错误：此脚本必须以 root 权限运行。" >&2
-  echo "请尝试使用 'sudo ./install_caddy_universal.sh' 命令运行。" >&2
-  exit 1
-fi
 
 # --- 依赖项安装 ---
 echo ">>> 步骤 1: 检测包管理器并安装依赖项 (curl, jq)..."
@@ -117,36 +98,8 @@ if [ "$GO_AVAILABLE" = true ]; then
   rm -rf "$TMP_DIR"
   
   echo "✅ 已成功安装带 Cloudflare DNS 插件的 Caddy"
-else
-  echo ">>> 下载预构建的官方 Caddy 版本..."
-  LATEST_RELEASE_URL="https://api.github.com/repos/caddyserver/caddy/releases/latest"
-  DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | jq -r ".assets[] | select(.name | test(\"linux_${ARCH}.tar.gz$\")) | .browser_download_url")
-  LATEST_VERSION=$(curl -sL "$LATEST_RELEASE_URL" | jq -r ".tag_name")
 
-  if [ -z "$DOWNLOAD_URL" ]; then
-    echo "错误：无法从 GitHub API 获取 Caddy 的下载链接。" >&2
-    exit 1
-  fi
-  echo "找到最新版本 Caddy: ${LATEST_VERSION}"
-  echo "下载链接: ${DOWNLOAD_URL}"
-
-  # --- 下载和安装 ---
-  echo ""
-  echo ">>> 步骤 3: 下载并安装 Caddy 二进制文件..."
-  TMP_DIR=$(mktemp -d)
-  cd "$TMP_DIR"
-
-  curl -sSL "$DOWNLOAD_URL" -o "caddy.tar.gz"
-  tar -xzf "caddy.tar.gz" caddy
-
-  echo "将 Caddy 可执行文件移动到 /usr/local/bin/..."
-  mv caddy /usr/local/bin/
-  chown root:root /usr/local/bin/caddy
-  chmod +x /usr/local/bin/caddy
-
-  cd ..
-  rm -rf "$TMP_DIR"
-fi
+ 
 
 # --- 创建用户和目录 ---
 echo ""
