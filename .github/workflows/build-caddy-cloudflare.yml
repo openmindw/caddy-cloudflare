@@ -196,30 +196,39 @@ jobs:
       id: tag
       run: |
         if [ "${{ github.event_name }}" == "schedule" ]; then
-          # For scheduled builds, create a weekly release tag
-          TAG="weekly-$(date +%Y%m%d)"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          # For scheduled builds, create a weekly release tag with additional entropy
+          BASE_TAG="weekly-$(date +%Y%m%d)"
+          # Add hour-minute to ensure uniqueness if run multiple times per day
+          TAG="${BASE_TAG}-$(date +%H%M)"
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
         elif [ "${{ github.event.inputs.create_release }}" == "true" ]; then
           # For manual builds with release option
-          if [ "${{ github.event.inputs.manual_tag }}" != "" ] && [ "${{ github.event.inputs.manual_tag }}" != "latest" ]; then
-            # Use the manually specified tag
-            TAG="${{ github.event.inputs.manual_tag }}"
+          if [ "${{ github.event.inputs.manual_tag }}" != "" ]; then
+            # Use the manually specified tag with additional entropy to ensure uniqueness
+            USER_TAG="${{ github.event.inputs.manual_tag }}"
+            if [ "${USER_TAG}" = "latest" ]; then
+              # Special handling for 'latest' tag to make it unique
+              TAG="latest-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
+            else
+              # Add run number to ensure uniqueness for custom tags
+              TAG="${USER_TAG}-${{ github.run_number }}"
+            fi
           else
-            # Use default manual tag with timestamp
-            TAG="manual-$(date +%Y%m%d-%H%M%S)"
+            # Use default manual tag with enhanced timestamp and run number
+            TAG="manual-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
           fi
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "is_prerelease=true" >> $GITHUB_OUTPUT
         elif [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          # For tag-based releases
+          # For tag-based releases - these should be unique by design
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${{ contains(github.ref, '-') }}" >> $GITHUB_OUTPUT
         else
           echo "Error: Unexpected trigger condition for release creation"
           exit 1
         fi
+        
+        echo "Generated unique tag: ${TAG}"
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT
         echo "build_date=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
     - name: Create Release
@@ -229,6 +238,9 @@ jobs:
         name: Release ${{ steps.tag.outputs.tag }}
         draft: false
         prerelease: ${{ steps.tag.outputs.is_prerelease }}
+        fail_on_unmatched_files: true
+        generate_release_notes: true
+        make_latest: ${{ steps.tag.outputs.is_prerelease == 'false' && !contains(steps.tag.outputs.tag, 'manual') }}
         body: |
           ## Caddy with Cloudflare DNS Plugin
           
@@ -238,6 +250,8 @@ jobs:
           - Build Date: ${{ steps.tag.outputs.build_date }}
           - Trigger: ${{ github.event_name }}
           - Commit: ${{ github.sha }}
+          - Tag: ${{ steps.tag.outputs.tag }}
+          - Workflow Run: ${{ github.run_number }}
           
           ### Installation
           
