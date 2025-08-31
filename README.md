@@ -22,11 +22,7 @@ This repository includes a GitHub Actions workflow that automatically builds Cad
 - Windows (amd64, arm64)  
 - macOS (amd64, arm64)
 
-The workflow can be triggered:
-1. **Automatically** when a new version tag is pushed (e.g., `v2.8.4`)
-2. **Manually** via GitHub Actions with an optional Caddy version parameter
-
-### Using the Cloudflare DNS Plugin
+## Using the Cloudflare DNS Plugin
 
 After installation, you can use the Cloudflare DNS plugin for automatic HTTPS certificates:
 
@@ -43,6 +39,35 @@ After installation, you can use the Cloudflare DNS plugin for automatic HTTPS ce
        }
    }
    ```
+
+See [EXAMPLES.md](EXAMPLES.md) for more detailed configuration examples.
+
+## Automated Builds
+
+This repository includes a GitHub Actions workflow that automatically builds Caddy with the Cloudflare DNS plugin for multiple platforms:
+
+- Linux (amd64, arm64, armv7, armv6)
+- Windows (amd64, arm64)  
+- macOS (amd64, arm64)
+
+### Triggering Builds
+
+The workflow can be triggered in two ways:
+
+1. **Tag-based releases**: Push a version tag (e.g., `v2.8.4`) to automatically build and create a GitHub release
+   ```bash
+   git tag v2.8.4
+   git push origin v2.8.4
+   ```
+
+2. **Manual execution**: Go to the Actions tab in GitHub and manually run the "Build Caddy with Cloudflare Plugin" workflow. You can optionally specify a Caddy version to build.
+
+### Build Output
+
+Each build produces:
+- Compressed binaries (`.tar.gz` for Unix, `.zip` for Windows)
+- SHA256 checksums for verification
+- Automatic GitHub releases with detailed descriptions
 
 ## Manual Building
 
