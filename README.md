@@ -65,7 +65,9 @@ The workflow can be triggered in three ways:
 3. **Manual execution**: Go to the Actions tab in GitHub and manually run the "Build Caddy with Cloudflare Plugin" workflow. You can optionally:
    - Specify a Caddy version to build (default: latest)
    - Choose to create a release for the build
-   - Set a custom tag name for the release (default: latest)
+   - Set a custom tag name for the release (default: generates unique timestamp-based tag)
+   
+   **Note**: To ensure unique releases, the workflow automatically adds a run number suffix to custom tag names and generates timestamp-based tags for manual releases. This prevents conflicts with existing releases.
 
 ### Build Output
 
