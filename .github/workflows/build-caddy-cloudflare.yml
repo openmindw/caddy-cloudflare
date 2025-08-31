@@ -200,11 +200,14 @@ jobs:
           TAG="manual-$(date +%Y%m%d-%H%M%S)"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "is_prerelease=true" >> $GITHUB_OUTPUT
-        else
+        elif [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
           # For tag-based releases
           TAG="${GITHUB_REF#refs/tags/}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "is_prerelease=${{ contains(steps.tag.outputs.tag, '-') }}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=${{ contains(github.ref, '-') }}" >> $GITHUB_OUTPUT
+        else
+          echo "Error: Unexpected trigger condition for release creation"
+          exit 1
         fi
         echo "build_date=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
