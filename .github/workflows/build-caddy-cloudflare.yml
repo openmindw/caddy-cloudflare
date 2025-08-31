@@ -1,0 +1,233 @@
+name: Build Caddy with Cloudflare Plugin
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      caddy_version:
+        description: 'Caddy version to build (e.g., v2.8.4 or latest)'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  # https://github.com/actions/setup-go/issues/491
+  GOTOOLCHAIN: local
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Caddy-Cloudflare
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm
+            goarm: 7
+            name: linux-armv7
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm
+            goarm: 6
+            name: linux-armv6
+          
+          # Windows builds
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            name: windows-amd64
+            ext: .exe
+          - os: ubuntu-latest
+            goos: windows
+            goarch: arm64
+            name: windows-arm64
+            ext: .exe
+          
+          # macOS builds
+          - os: ubuntu-latest
+            goos: darwin
+            goarch: amd64
+            name: macos-amd64
+          - os: ubuntu-latest
+            goos: darwin
+            goarch: arm64
+            name: macos-arm64
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Harden the runner
+      uses: step-security/harden-runner@v2
+      with:
+        egress-policy: audit
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '~1.25'
+        check-latest: true
+
+    - name: Print Go version and environment
+      run: |
+        printf "Using go at: $(which go)\n"
+        printf "Go version: $(go version)\n"
+        printf "\n\nGo environment:\n\n"
+        go env
+
+    - name: Install xcaddy
+      run: |
+        go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+        xcaddy version
+
+    - name: Build Caddy with Cloudflare plugin
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
+        CGO_ENABLED: 0
+      run: |
+        # Create build directory
+        mkdir -p build
+        
+        # Determine Caddy version to build
+        if [ "${{ github.event.inputs.caddy_version }}" != "" ] && [ "${{ github.event.inputs.caddy_version }}" != "latest" ]; then
+          CADDY_VERSION="${{ github.event.inputs.caddy_version }}"
+        else
+          CADDY_VERSION="latest"
+        fi
+        
+        echo "Building Caddy ${CADDY_VERSION} with Cloudflare plugin for ${GOOS}/${GOARCH}"
+        
+        # Build with xcaddy
+        if [ "${CADDY_VERSION}" = "latest" ]; then
+          xcaddy build --with github.com/caddy-dns/cloudflare --output build/caddy-${{ matrix.name }}${{ matrix.ext }}
+        else
+          xcaddy build ${CADDY_VERSION} --with github.com/caddy-dns/cloudflare --output build/caddy-${{ matrix.name }}${{ matrix.ext }}
+        fi
+        
+        # Verify the binary was created
+        if [ ! -f "build/caddy-${{ matrix.name }}${{ matrix.ext }}" ]; then
+          echo "Error: Binary not created"
+          exit 1
+        fi
+        
+        # Get version info
+        chmod +x build/caddy-${{ matrix.name }}${{ matrix.ext }} || true
+        ls -la build/
+
+    - name: Create tarball (Unix)
+      if: matrix.goos != 'windows'
+      run: |
+        cd build
+        tar -czf caddy-cloudflare-${{ matrix.name }}.tar.gz caddy-${{ matrix.name }}
+        sha256sum caddy-cloudflare-${{ matrix.name }}.tar.gz > caddy-cloudflare-${{ matrix.name }}.tar.gz.sha256
+
+    - name: Create zip (Windows)
+      if: matrix.goos == 'windows'
+      run: |
+        cd build
+        zip caddy-cloudflare-${{ matrix.name }}.zip caddy-${{ matrix.name }}${{ matrix.ext }}
+        sha256sum caddy-cloudflare-${{ matrix.name }}.zip > caddy-cloudflare-${{ matrix.name }}.zip.sha256
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: caddy-cloudflare-${{ matrix.name }}
+        path: build/*
+        retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Harden the runner
+      uses: step-security/harden-runner@v2
+      with:
+        egress-policy: audit
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release
+        find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release/ \;
+        ls -la release/
+
+    - name: Get tag name
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: Release ${{ steps.tag.outputs.tag }}
+        draft: false
+        prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+        body: |
+          ## Caddy with Cloudflare DNS Plugin
+          
+          This release contains Caddy binaries built with the Cloudflare DNS plugin.
+          
+          ### Installation
+          
+          1. Download the appropriate binary for your platform
+          2. Extract the archive
+          3. Make the binary executable: `chmod +x caddy-*`
+          4. Move to your PATH: `sudo mv caddy-* /usr/local/bin/caddy`
+          
+          ### Usage
+          
+          To use the Cloudflare DNS plugin for automatic HTTPS certificates:
+          
+          1. Get a Cloudflare API Token with DNS edit permissions
+          2. Set the environment variable: `export CADDY_CF_TOKEN="your-token"`
+          3. Use in your Caddyfile:
+          ```
+          your-domain.com {
+              tls {
+                  dns cloudflare {env.CADDY_CF_TOKEN}
+              }
+          }
+          ```
+          
+          ### Files
+          
+          - `caddy-cloudflare-*.tar.gz` - Compressed binaries for Unix-like systems
+          - `caddy-cloudflare-*.zip` - Compressed binaries for Windows
+          - `*.sha256` - SHA256 checksums for verification
+          
+          ### Verify Downloads
+          
+          ```bash
+          sha256sum -c caddy-cloudflare-*.sha256
+          ```
+        files: release/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
