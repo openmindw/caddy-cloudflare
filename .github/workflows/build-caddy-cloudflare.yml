@@ -16,6 +16,11 @@ on:
         required: false
         default: false
         type: boolean
+      manual_tag:
+        description: 'Tag name for manual release (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
   schedule:
     # Run every Sunday at 02:00 UTC
     - cron: '0 2 * * 0'
@@ -197,7 +202,13 @@ jobs:
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
         elif [ "${{ github.event.inputs.create_release }}" == "true" ]; then
           # For manual builds with release option
-          TAG="manual-$(date +%Y%m%d-%H%M%S)"
+          if [ "${{ github.event.inputs.manual_tag }}" != "" ] && [ "${{ github.event.inputs.manual_tag }}" != "latest" ]; then
+            # Use the manually specified tag
+            TAG="${{ github.event.inputs.manual_tag }}"
+          else
+            # Use default manual tag with timestamp
+            TAG="manual-$(date +%Y%m%d-%H%M%S)"
+          fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "is_prerelease=true" >> $GITHUB_OUTPUT
         elif [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
