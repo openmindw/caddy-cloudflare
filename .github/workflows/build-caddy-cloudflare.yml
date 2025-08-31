@@ -11,6 +11,14 @@ on:
         required: false
         default: 'latest'
         type: string
+      create_release:
+        description: 'Create a release for this build'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Run every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
 
 env:
   # https://github.com/actions/setup-go/issues/491
@@ -157,7 +165,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event.schedule || github.event.inputs.create_release == 'true'
     
     steps:
     - name: Harden the runner
@@ -181,7 +189,27 @@ jobs:
 
     - name: Get tag name
       id: tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: |
+        if [ "${{ github.event_name }}" == "schedule" ]; then
+          # For scheduled builds, create a weekly release tag
+          TAG="weekly-$(date +%Y%m%d)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.inputs.create_release }}" == "true" ]; then
+          # For manual builds with release option
+          TAG="manual-$(date +%Y%m%d-%H%M%S)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # For tag-based releases
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "is_prerelease=${{ contains(github.ref, '-') }}" >> $GITHUB_OUTPUT
+        else
+          echo "Error: Unexpected trigger condition for release creation"
+          exit 1
+        fi
+        echo "build_date=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -189,11 +217,16 @@ jobs:
         tag_name: ${{ steps.tag.outputs.tag }}
         name: Release ${{ steps.tag.outputs.tag }}
         draft: false
-        prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+        prerelease: ${{ steps.tag.outputs.is_prerelease }}
         body: |
           ## Caddy with Cloudflare DNS Plugin
           
           This release contains Caddy binaries built with the Cloudflare DNS plugin.
+          
+          **Build Information:**
+          - Build Date: ${{ steps.tag.outputs.build_date }}
+          - Trigger: ${{ github.event_name }}
+          - Commit: ${{ github.sha }}
           
           ### Installation
           

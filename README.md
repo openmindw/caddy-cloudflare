@@ -52,7 +52,7 @@ This repository includes a GitHub Actions workflow that automatically builds Cad
 
 ### Triggering Builds
 
-The workflow can be triggered in two ways:
+The workflow can be triggered in three ways:
 
 1. **Tag-based releases**: Push a version tag (e.g., `v2.8.4`) to automatically build and create a GitHub release
    ```bash
@@ -60,7 +60,11 @@ The workflow can be triggered in two ways:
    git push origin v2.8.4
    ```
 
-2. **Manual execution**: Go to the Actions tab in GitHub and manually run the "Build Caddy with Cloudflare Plugin" workflow. You can optionally specify a Caddy version to build.
+2. **Scheduled builds**: Automatic weekly builds every Sunday at 02:00 UTC that create releases with binaries for all supported platforms
+
+3. **Manual execution**: Go to the Actions tab in GitHub and manually run the "Build Caddy with Cloudflare Plugin" workflow. You can optionally:
+   - Specify a Caddy version to build (default: latest)
+   - Choose to create a release for the build
 
 ### Build Output
 
