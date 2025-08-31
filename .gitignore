@@ -1,1 +1,17 @@
 *.Identifier
+
+# Build artifacts
+/build/
+/dist/
+/artifacts/
+/release/
+*.tar.gz
+*.zip
+*.sha256
+caddy
+caddy.exe
+
+# Temporary files
+/tmp/
+.DS_Store
+Thumbs.db
